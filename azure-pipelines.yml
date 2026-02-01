@@ -79,11 +79,11 @@ stages:
             useGlobalJson: true
 
         - task: DotNetCoreCLI@2
+          displayName: 'Install Azure SignTool'
           inputs:
             command: 'custom'
             custom: 'tool'
             arguments: 'install --global I-Synergy.Tools.Azure.SignTool'
-          displayName: Install I-Synergy Azure SignTool
 
         - task: MSBuild@1
           displayName: 'Build I-Synergy Azure SignTool'
@@ -110,7 +110,7 @@ stages:
         - task: CmdLine@2
           displayName: 'Sign Nuget packages'
           inputs:
-            script: AzureSignTool sign -kvt "$(AzureTenantId)" -kvu "$(KeyVaultUri)" -kvi "$(ClientId)" -kvs "$(ClientSecret)" -kvc "$(CertificateName)" -tr "http://ts.ssl.com" -td sha256  -v $(Build.ArtifactStagingDirectory)\*.nupkg
+            script: AzureSignTool sign -kvt "$(AzureTenantId)" -kvu "$(KeyVaultUri)" -kvi "$(ClientId)" -kvs "$(ClientSecret)" -kvc "$(CertificateName)" --timestamp-rfc3161 "$(TimeStampUrl)" -td sha256 -v $(Build.ArtifactStagingDirectory)\*.nupkg
 
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Artifacts'

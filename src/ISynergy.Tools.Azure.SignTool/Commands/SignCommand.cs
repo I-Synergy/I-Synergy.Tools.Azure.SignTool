@@ -1,5 +1,6 @@
 using Azure.Security.KeyVault.Keys.Cryptography;
 using ISynergy.Tools.Azure.SignTool.Configuration;
+using ISynergy.Tools.Azure.SignTool.Core.Abstractions.Services;
 using ISynergy.Tools.Azure.SignTool.Core.Configurations;
 using ISynergy.Tools.Azure.SignTool.Core.Enumerations;
 using ISynergy.Tools.Azure.SignTool.Core.Services;
@@ -162,6 +163,16 @@ internal static class SignCommand
             Description = "Append the signature, has no effect with --skip-signed."
         };
 
+        Option<bool> signNuGetContentsOption = new("--sign-nuget-contents", "-snc")
+        {
+            Description = "Sign the binaries inside NuGet packages in addition to the package signature. By default, only the package itself is signed."
+        };
+
+        Option<string?> signNuGetContentsFilterOption = new("--sign-nuget-contents-filter", "-sncf")
+        {
+            Description = "A glob pattern to filter which binaries inside NuGet packages should be signed (e.g., \"ISynergy.Framework.*\" or \"MyCompany.*.dll\"). Only used when --sign-nuget-contents is specified. Files not matching the pattern are left unchanged."
+        };
+
         // Files argument
         Argument<string[]> filesArgument = new("files")
         {
@@ -197,6 +208,8 @@ internal static class SignCommand
         command.Options.Add(colorsOption);
         command.Options.Add(skipSignedOption);
         command.Options.Add(appendSignatureOption);
+        command.Options.Add(signNuGetContentsOption);
+        command.Options.Add(signNuGetContentsFilterOption);
         command.Arguments.Add(filesArgument);
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -230,6 +243,8 @@ internal static class SignCommand
                 Colors = parseResult.GetValue(colorsOption),
                 SkipSignedFiles = parseResult.GetValue(skipSignedOption),
                 AppendSignature = parseResult.GetValue(appendSignatureOption),
+                SignNuGetContents = parseResult.GetValue(signNuGetContentsOption),
+                SignNuGetContentsFilter = parseResult.GetValue(signNuGetContentsFilterOption),
                 Files = parseResult.GetValue(filesArgument) ?? []
             };
 
@@ -360,8 +375,14 @@ internal static class SignCommand
 
         using (var keyVault = await client.CreateRSAAsync())
         using (var signer = new CodeSigningService(keyVault, materialized.PublicCertificate, ParseHashAlgorithm(options.FileDigestAlgorithm), timeStampConfiguration, certificates))
+        using (INuGetPackageSignatureService? nugetSignatureService = CreateNuGetSignatureService(keyVault, materialized.PublicCertificate, logger))
         {
-            var nugetSigner = new NuGetPackageSigner(signer, logger);
+            var nugetSigner = new NuGetPackageSigner(
+                signer,
+                nugetSignatureService,
+                options.Rfc3161TimestampUrl,
+                ParseHashAlgorithm(options.FileDigestAlgorithm),
+                logger);
 
             Parallel.ForEach(allFiles, parallelOptions, () => (succeeded: 0, failed: 0), (filePath, pls, state) =>
             {
@@ -388,7 +409,7 @@ internal static class SignCommand
                     // Check if this is a NuGet package
                     if (NuGetPackageSigner.IsNuGetPackage(filePath))
                     {
-                        result = nugetSigner.SignPackage(filePath, options.SignDescription, options.SignDescriptionUrl, performPageHashing, options.AppendSignature);
+                        result = nugetSigner.SignPackage(filePath, options.SignDescription, options.SignDescriptionUrl, performPageHashing, options.AppendSignature, options.SignNuGetContents, options.SignNuGetContentsFilter);
                     }
                     else
                     {
@@ -803,6 +824,19 @@ internal static class SignCommand
     }
 
     private static readonly string[] s_hashAlgorithm = ["SHA1", "SHA256", "SHA384", "SHA512"];
+
+    private static INuGetPackageSignatureService? CreateNuGetSignatureService(RSA keyVault, X509Certificate2 certificate, ILogger logger)
+    {
+        try
+        {
+            return new NuGetPackageSignatureService(keyVault, certificate, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to create NuGet package signature service. NuGet packages will not have package-level signatures.");
+            return null;
+        }
+    }
 }
 
 internal sealed class SignOptions
@@ -834,5 +868,7 @@ internal sealed class SignOptions
     public bool Colors { get; set; }
     public bool SkipSignedFiles { get; set; }
     public bool AppendSignature { get; set; }
+    public bool SignNuGetContents { get; set; }
+    public string? SignNuGetContentsFilter { get; set; }
     public string[] Files { get; set; } = [];
 }

@@ -12,9 +12,10 @@
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.0-beta5.25306.1" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.2" />
     <PackageVersion Include="MSTest.TestAdapter" Version="4.0.2" />
     <PackageVersion Include="MSTest.TestFramework" Version="4.0.2" />
     <PackageVersion Include="System.IO.Packaging" Version="10.0.2" />
+    <PackageVersion Include="NuGet.Packaging" Version="7.0.1" />
   </ItemGroup>
 </Project>

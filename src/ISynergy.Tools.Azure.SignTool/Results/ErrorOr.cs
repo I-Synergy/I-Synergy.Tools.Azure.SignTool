@@ -2,8 +2,8 @@ namespace ISynergy.Tools.Azure.SignTool.Results;
 
 public abstract class ErrorOr<TValue>
 {
-    private readonly TValue _value;
-    private readonly Exception _error;
+    private readonly TValue? _value;
+    private readonly Exception? _error;
 
     private ErrorOr(TValue value) => _value = value;
 
@@ -18,7 +18,7 @@ public abstract class ErrorOr<TValue>
         {
         }
 
-        public TValue Value => _value;
+        public TValue Value => _value!;
     }
 
     public class Err : ErrorOr<TValue>
@@ -27,6 +27,6 @@ public abstract class ErrorOr<TValue>
         {
         }
 
-        public Exception Error => _error;
+        public Exception Error => _error!;
     }
 }

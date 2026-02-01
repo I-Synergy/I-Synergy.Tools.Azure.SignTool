@@ -25,8 +25,8 @@ public class CodeSigningServiceTests
     }
 
     [TestMethod]
-    [DataRow("certificates/sign/rsa-2048.pfx")]
-    [DataRow("certificates/sign/rsa-4096.pfx")]
+    [DataRow("Certificates/Sign/rsa-2048.pfx")]
+    [DataRow("Certificates/Sign/rsa-4096.pfx")]
     public void ShouldSignExeWithRSASigningCertificates_Sha1FileDigest(string certificate)
     {
         var signingCert = X509CertificateLoader.LoadPkcs12FromFile(certificate, "test", X509KeyStorageFlags.EphemeralKeySet);
@@ -44,8 +44,8 @@ public class CodeSigningServiceTests
     }
 
     [TestMethod]
-    [DataRow("certificates/sign/rsa-2048.pfx")]
-    [DataRow("certificates/sign/rsa-4096.pfx")]
+    [DataRow("Certificates/Sign/rsa-2048.pfx")]
+    [DataRow("Certificates/Sign/rsa-4096.pfx")]
     public void ShouldSignExeWithRSASigningCertificates_Sha256FileDigest(string certificate)
     {
         var signingCert = X509CertificateLoader.LoadPkcs12FromFile(certificate, "test", X509KeyStorageFlags.EphemeralKeySet);
@@ -63,9 +63,9 @@ public class CodeSigningServiceTests
     }
 
     [TestMethod]
-    [DataRow("certificates/sign/ecdsa-nist-p256.pfx")]
-    [DataRow("certificates/sign/ecdsa-nist-p384.pfx")]
-    [DataRow("certificates/sign/ecdsa-nist-p521.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p256.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p384.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p521.pfx")]
     public void ShouldSignExeWithECDsaSigningCertificates_Sha256FileDigest(string certificate)
     {
         var signingCert = X509CertificateLoader.LoadPkcs12FromFile(certificate, "test", X509KeyStorageFlags.EphemeralKeySet);
@@ -83,9 +83,9 @@ public class CodeSigningServiceTests
     }
 
     [TestMethod]
-    [DataRow("certificates/sign/ecdsa-nist-p256.pfx")]
-    [DataRow("certificates/sign/ecdsa-nist-p384.pfx")]
-    [DataRow("certificates/sign/ecdsa-nist-p521.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p256.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p384.pfx")]
+    [DataRow("Certificates/Sign/ecdsa-nist-p521.pfx")]
     public void ShouldSignExeWithECDsaSigningCertificates_Sha256FileDigest_WithTimestamps(string certificate)
     {
         var signingCert = X509CertificateLoader.LoadPkcs12FromFile(certificate, "test", X509KeyStorageFlags.EphemeralKeySet);
@@ -104,8 +104,8 @@ public class CodeSigningServiceTests
     }
 
     [TestMethod]
-    [DataRow("certificates/sign/rsa-2048.pfx")]
-    [DataRow("certificates/sign/rsa-4096.pfx")]
+    [DataRow("Certificates/Sign/rsa-2048.pfx")]
+    [DataRow("Certificates/Sign/rsa-4096.pfx")]
     public void ShouldSignExeWithRSASigningCertificates_Sha256FileDigest_WithTimestamps(string certificate)
     {
         var signingCert = X509CertificateLoader.LoadPkcs12FromFile(certificate, "test", X509KeyStorageFlags.EphemeralKeySet);
