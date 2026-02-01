@@ -26,8 +26,7 @@ public class Program
         rootCommand.Add(SignCommand.Create());
         rootCommand.Add(AboutCommand.Create());
 
-        var config = new CommandLineConfiguration(rootCommand);
-        return await config.InvokeAsync(args);
+        return await rootCommand.Parse(args).InvokeAsync();
     }
 
     internal static string GetVersion()
