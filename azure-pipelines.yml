@@ -110,7 +110,7 @@ stages:
         - task: CmdLine@2
           displayName: 'Sign Nuget packages'
           inputs:
-            script: AzureSignTool sign -kvt "$(AzureTenantId)" -kvu "$(KeyVaultUri)" -kvi "$(ClientId)" -kvs "$(ClientSecret)" -kvc "$(CertificateName)" -timestamp-rfc3161 "$(TimeStampUrl)" -td sha256 -v $(Build.ArtifactStagingDirectory)\*.nupkg
+            script: AzureSignTool sign -kvt "$(AzureTenantId)" -kvu "$(KeyVaultUri)" -kvi "$(ClientId)" -kvs "$(ClientSecret)" -kvc "$(CertificateName)" --timestamp-rfc3161 "$(TimeStampUrl)" -td sha256 -v $(Build.ArtifactStagingDirectory)\*.nupkg
 
         - task: PublishBuildArtifacts@1
           displayName: 'Publish Artifacts'
