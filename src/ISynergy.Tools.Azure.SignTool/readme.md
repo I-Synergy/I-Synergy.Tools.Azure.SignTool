@@ -12,12 +12,12 @@ dotnet tool install --global ISynergy.Tools.Azure.SignTool
 
 ### Basic Usage with Client Secret
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -kvu https://my-vault.vault.azure.net -kvc my-cert -kvi <client-id> -kvt <tenant-id> -kvs <client-secret> -tr http://timestamp.digicert.com myfile.exe
+AzureSignTool sign -kvu https://my-vault.vault.azure.net -kvc my-cert -kvi <client-id> -kvt <tenant-id> -kvs <client-secret> -tr http://timestamp.digicert.com myfile.exe
 ```
 
 ### Recommended: Using Explicit Credential Type (Production)
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -kvu https://my-vault.vault.azure.net -kvc my-cert -act WorkloadIdentityCredential -tr http://timestamp.digicert.com myfile.exe
+AzureSignTool sign -kvu https://my-vault.vault.azure.net -kvc my-cert -act WorkloadIdentityCredential -tr http://timestamp.digicert.com myfile.exe
 ```
 
 Use `--help` or `sign --help` for detailed parameter information.

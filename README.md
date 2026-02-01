@@ -1,4 +1,4 @@
-# ISynergy.Tools.Azure.SignTool
+# I-Synergy Azure SignTool
 
 A code signing tool that uses Azure Key Vault for performing the signing process. Similar to `signtool` in the Windows SDK, but uses Azure Key Vault certificates.
 
@@ -9,7 +9,7 @@ This project is based on [AzureSignTool](https://github.com/vcsjones/AzureSignTo
 ### Basic Usage with Client Secret
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
+AzureSignTool sign -du "https://example.com" `
     -fd sha384 -kvu https://my-vault.vault.azure.net `
     -kvi 01234567-abcd-ef012-0000-0123456789ab `
     -kvt 01234567-abcd-ef012-0000-0123456789ab `
@@ -24,7 +24,7 @@ ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
 ### Using Workload Identity (Recommended for Kubernetes/Containers)
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
+AzureSignTool sign -du "https://example.com" `
     -fd sha384 -kvu https://my-vault.vault.azure.net `
     -act WorkloadIdentityCredential `
     -kvc my-certificate-name `
@@ -37,7 +37,7 @@ ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
 ### Using Managed Identity
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
+AzureSignTool sign -du "https://example.com" `
     -fd sha384 -kvu https://my-vault.vault.azure.net `
     -act ManagedIdentityCredential `
     -kvc my-certificate-name `
@@ -50,7 +50,7 @@ ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
 ### Using Azure CLI Credential (for Local Development)
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
+AzureSignTool sign -du "https://example.com" `
     -fd sha384 -kvu https://my-vault.vault.azure.net `
     -act AzureCliCredential `
     -kvc my-certificate-name `
@@ -63,7 +63,7 @@ ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
 ### Using Interactive Browser (for Interactive Scenarios)
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -du "https://example.com" `
+AzureSignTool sign -du "https://example.com" `
     -fd sha384 -kvu https://my-vault.vault.azure.net `
     -act InteractiveBrowserCredential `
     -kvi 01234567-abcd-ef012-0000-0123456789ab `
@@ -82,7 +82,7 @@ The `--help` or `sign --help` option provides more detail about each parameter.
 ### .NET Tool
 
 ```powershell
-dotnet tool install --global ISynergy.Tools.Azure.SignTool
+dotnet tool install --global I-Synergy.Tools.Azure.SignTool
 ```
 
 ## Authentication Methods
@@ -99,7 +99,7 @@ When running the tool, it will log which authentication method is being used. Th
 
 Example with verbose logging:
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -kvu https://my-vault.vault.azure.net `
+AzureSignTool sign -kvu https://my-vault.vault.azure.net `
     -act WorkloadIdentityCredential `
     -kvc my-certificate `
     -tr http://timestamp.digicert.com `
@@ -220,7 +220,7 @@ When signing NuGet packages, the tool:
 
 Example:
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -kvu https://my-vault.vault.azure.net `
+AzureSignTool sign -kvu https://my-vault.vault.azure.net `
     -kvi <client-id> -kvt <tenant-id> -kvs <client-secret> `
     -kvc my-certificate `
     -tr http://timestamp.digicert.com `
@@ -246,7 +246,7 @@ If `MyPackage.1.0.0.snupkg` exists in the same directory, it will automatically 
 If you're having trouble with authentication, use the `--verbose` flag to see which credential type is being used:
 
 ```powershell
-ISynergy.Tools.Azure.SignTool sign -kvu https://my-vault.vault.azure.net `
+AzureSignTool sign -kvu https://my-vault.vault.azure.net `
     -act WorkloadIdentityCredential `
     -kvc my-certificate `
     -v `

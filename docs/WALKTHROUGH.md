@@ -34,7 +34,7 @@ The following basic preparations are required for all guides:
   inputs:
     command: 'custom'
     custom: 'tool'
-    arguments: 'install --global azuresigntool'
+    arguments: 'install --global I-Synergy.Tools.Azure.SignTool'
   displayName: Install AzureSignTool
 ```
 
@@ -75,7 +75,7 @@ The following basic preparations are required for all guides:
   inputs:
     command: 'custom'
     custom: 'tool'
-    arguments: 'install --global azuresigntool'
+    arguments: 'install --global I-Synergy.Tools.Azure.SignTool'
   displayName: Install AzureSignTool
 ```
 

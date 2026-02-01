@@ -4,6 +4,8 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>I-Synergy.Tools.Azure.SignTool</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>AzureSignTool</ToolCommandName>
     <Description>I-Synergy Tools for Azure Sign Tool</Description>
     <PackageTags>I-Synergy, Tools, Azure, SignTool, Nuget, AzureSignTool, NugetAzureSignTool</PackageTags>
   </PropertyGroup>

@@ -1,0 +1,188 @@
+name: $(Date:yyyy).1$(Date:MMdd).1$(Date:HHmm)
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    exclude:
+    - docs/*
+    - '*.md'
+
+pr:
+  branches:
+    include:
+    - main
+  paths:
+    exclude:
+    - docs/*
+    - '*.md'
+
+variables:
+  - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+    value: 'true'
+  - name: DOTNET_CLI_TELEMETRY_OPTOUT
+    value: 'true'
+  - name: VersionNumber
+    value: ''
+  - name: VersionInformational  
+    value: ''
+  - name: VersionPackage
+    value: ''
+
+  - ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+    - group: ACC
+  - ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+    - group: PROD
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+  - stage: BuildStage
+    displayName: 'Build'
+    jobs:
+    - job: BuildJob
+      displayName: 'Build, test and pack assemblies'
+      timeoutInMinutes: 120
+      steps:
+        - task: PowerShell@2
+          displayName: Set Version Variables
+          inputs:
+            targetType: 'filePath'
+            filePath: '$(Build.SourcesDirectory)/scripts/Set-VersionVariables.ps1'
+            arguments: '-BuildNumber "$(Build.BuildNumber)" -BuildReason "$(Build.Reason)"'
+
+        - task: Assembly-Info-NetCore@3
+          displayName: 'Set Release versions'
+          inputs:
+            FileNames: |
+              src/**/*.csproj
+              tests/**/*.csproj
+            InsertAttributes: true
+            WriteBOM: true
+            VersionNumber: '$(VersionNumber)'
+            FileVersionNumber: '$(VersionNumber)'
+            InformationalVersion: '$(VersionInformational)'
+            PackageVersion: '$(VersionPackage)'
+            UpdateBuildNumber: '$(VersionPackage)'
+
+        - task: NuGetToolInstaller@1
+          displayName: 'Install NuGet 7.0.0'
+          inputs:
+            versionSpec: 7.0.0
+
+        - task: UseDotNet@2
+          displayName: 'Install .Net Sdk'
+          inputs:
+            packageType: 'sdk'
+            useGlobalJson: true
+
+        - task: DotNetCoreCLI@2
+          inputs:
+            command: 'custom'
+            custom: 'tool'
+            arguments: 'install --global I-Synergy.Tools.Azure.SignTool'
+          displayName: Install I-Synergy Azure SignTool
+
+        - task: MSBuild@1
+          displayName: 'Build I-Synergy Azure SignTool'
+          inputs:
+            solution: 'I-Synergy.Tools.Azure.SignTool.slnx'
+            msbuildArchitecture: 'x64'
+            configuration: $(BuildConfiguration)
+            msbuildArguments: '-p:Version=$(VersionPackage) -t:restore,build,pack -p:ContinuousIntegrationBuild=true /nr:false' #this flag is important to avoid DLL lock for the 2nd build/analysis
+
+        - task: DotNetCoreCLI@2
+          displayName: 'Test I-Synergy Azure SignTool'
+          inputs:
+            command: test
+            projects: 'I-Synergy.Tools.Azure.SignTool.slnx'
+            arguments: '--configuration $(BuildConfiguration) --no-build --test-adapter-path:. --collect:"Code Coverage" --settings:codecoverage.runsettings'
+       
+        - task: CopyFiles@2
+          displayName: 'Copy NuGet packages'
+          inputs:
+            SourceFolder: '$(Build.SourcesDirectory)\packages'
+            Contents: '*'
+            TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+        - task: CmdLine@2
+          displayName: 'Sign Nuget packages'
+          inputs:
+            script: AzureSignTool sign -kvt "$(AzureTenantId)" -kvu "$(KeyVaultUri)" -kvi "$(ClientId)" -kvs "$(ClientSecret)" -kvc "$(CertificateName)" -tr "http://ts.ssl.com" -td sha256  -v $(Build.ArtifactStagingDirectory)\*.nupkg
+
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifacts'
+          inputs:
+            pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            artifactName: Output
+            publishLocation: 'Container'
+
+  - stage: Release
+    displayName: 'Release'
+    dependsOn: BuildStage
+    condition: succeeded()
+    jobs:
+    - job: ArtifactsJob
+      displayName: 'Get Nuget artifacts'
+      steps:
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            artifact: 'Output'
+
+    - deployment: DeployNuget
+      displayName: 'Deploy to NuGet'
+      environment: $(Environment)
+      dependsOn: ArtifactsJob
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - task: NuGetToolInstaller@1
+                displayName: 'Install NuGet 7.0.0'
+                inputs:
+                  versionSpec: 7.0.0
+
+              - task: NuGetCommand@2
+                displayName: 'NuGet push - I-Synergy Azure SignTool'
+                inputs:
+                  command: 'push'
+                  packagesToPush: '$(Pipeline.Workspace)/Output/*.nupkg'
+                  nuGetFeedType: 'external'
+                  publishFeedCredentials: 'Nuget.org'
+
+    - job: GitHubReleaseJob
+      displayName: 'Create GitHub Tag and Release'
+      dependsOn: DeployNuget
+      condition: and(succeeded('DeployNuget'), ne(variables['Build.Reason'], 'PullRequest'))
+      steps:
+        - checkout: self
+          fetchDepth: 0
+          persistCredentials: true
+
+        - task: PowerShell@2
+          displayName: 'Generate Release Notes'
+          inputs:
+            targetType: 'filePath'
+            filePath: '$(Build.SourcesDirectory)/scripts/New-ReleaseNotes.ps1'
+            arguments: '-BuildNumber "$(Build.BuildNumber)" -OutputPath "$(Build.ArtifactStagingDirectory)\RELEASE_NOTES.md"'
+
+        - task: PowerShell@2
+          displayName: 'Create Git Tag'
+          inputs:
+            targetType: 'filePath'
+            filePath: '$(Build.SourcesDirectory)/scripts/New-GitTag.ps1'
+            arguments: '-BuildNumber "$(Build.BuildNumber)" -SourceVersion "$(Build.SourceVersion)"'
+
+        - task: GitHubRelease@1
+          displayName: 'Create GitHub Release'
+          inputs:
+            gitHubConnection: 'GitHub'
+            repositoryName: '$(Build.Repository.Name)'
+            action: 'create'
+            target: '$(Build.SourceVersion)'
+            tagSource: 'gitTag'
+            tag: '$(Build.BuildNumber)'
+            releaseNotesFilePath: '$(Build.ArtifactStagingDirectory)\RELEASE_NOTES.md'
+            isPreRelease: ${{ eq(variables['Build.Reason'], 'PullRequest') }}
