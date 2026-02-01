@@ -280,6 +280,6 @@ internal class AzureKeyVaultConfigurationDiscoverer
     private TokenCredential CreateAccessTokenCredential(AzureKeyVaultSignConfigurationSet configuration)
     {
         _logger.LogInformation("Creating AccessTokenCredential using provided access token");
-        return new AccessTokenCredential(configuration.AzureAccessToken);
+        return new AccessTokenCredential(configuration.AzureAccessToken!);
     }
 }
