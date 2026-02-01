@@ -6,6 +6,7 @@
     <PackageId>I-Synergy.Tools.Azure.SignTool</PackageId>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>AzureSignTool</ToolCommandName>
+    <AssemblyName>AzureSignTool</AssemblyName>
     <Description>I-Synergy Tools for Azure Sign Tool</Description>
     <PackageTags>I-Synergy, Tools, Azure, SignTool, Nuget, AzureSignTool, NugetAzureSignTool</PackageTags>
   </PropertyGroup>

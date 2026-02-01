@@ -5,7 +5,7 @@ A command-line tool for signing files using Azure Key Vault certificates. Simila
 ## Installation
 
 ```powershell
-dotnet tool install --global ISynergy.Tools.Azure.SignTool
+dotnet tool install --global I-Synergy.Tools.Azure.SignTool
 ```
 
 ## Usage
