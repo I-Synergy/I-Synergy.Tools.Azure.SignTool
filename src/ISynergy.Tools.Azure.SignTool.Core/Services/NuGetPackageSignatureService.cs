@@ -2,7 +2,9 @@ using ISynergy.Tools.Azure.SignTool.Core.Abstractions.Services;
 using Microsoft.Extensions.Logging;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 
 namespace ISynergy.Tools.Azure.SignTool.Core.Services;
@@ -13,7 +15,8 @@ namespace ISynergy.Tools.Azure.SignTool.Core.Services;
 /// </summary>
 public class NuGetPackageSignatureService : INuGetPackageSignatureService
 {
-    private readonly X509Certificate2 _certificateWithKey;
+    private readonly RSA _signingAlgorithm;
+    private readonly X509Certificate2 _certificate;
     private readonly Microsoft.Extensions.Logging.ILogger? _logger;
 
     /// <summary>
@@ -30,9 +33,11 @@ public class NuGetPackageSignatureService : INuGetPackageSignatureService
         ArgumentNullException.ThrowIfNull(signingAlgorithm);
         ArgumentNullException.ThrowIfNull(certificate);
 
-        // Create a certificate that appears to have a private key
-        // The actual signing will be done through the Azure Key Vault RSA instance
-        _certificateWithKey = certificate.CopyWithPrivateKey(signingAlgorithm);
+        // Store the Key Vault RSA and certificate separately.
+        // We do NOT use CopyWithPrivateKey because Azure Key Vault keys are non-exportable.
+        // Instead, we create a custom signature provider that uses the RSA directly for signing operations.
+        _signingAlgorithm = signingAlgorithm;
+        _certificate = certificate;
         _logger = logger;
     }
 
@@ -66,8 +71,8 @@ public class NuGetPackageSignatureService : INuGetPackageSignatureService
                 timestampProvider = new Rfc3161TimestampProvider(new Uri(timestampUrl));
             }
 
-            // Create the signature provider
-            var signatureProvider = new X509SignatureProvider(timestampProvider);
+            // Create the custom Key Vault signature provider
+            var signatureProvider = new KeyVaultSignatureProvider(_signingAlgorithm, timestampProvider);
 
             // Determine the hash algorithm for NuGet
             var nugetHashAlgorithm = hashAlgorithm.Name switch
@@ -78,9 +83,9 @@ public class NuGetPackageSignatureService : INuGetPackageSignatureService
                 _ => NuGet.Common.HashAlgorithmName.SHA256
             };
 
-            // Create an author signature request
+            // Create an author signature request using the certificate (without requiring private key access)
             var request = new AuthorSignPackageRequest(
-                _certificateWithKey,
+                _certificate,
                 nugetHashAlgorithm,
                 nugetHashAlgorithm);
 
@@ -132,7 +137,254 @@ public class NuGetPackageSignatureService : INuGetPackageSignatureService
     /// <inheritdoc/>
     public void Dispose()
     {
-        _certificateWithKey?.Dispose();
+        // Certificate is owned by the caller, don't dispose it here
+    }
+
+    /// <summary>
+    /// Custom signature provider that uses Azure Key Vault RSA for signing operations.
+    /// This avoids the need to export private key material from Key Vault.
+    /// </summary>
+    private sealed class KeyVaultSignatureProvider : ISignatureProvider
+    {
+        private readonly RSA _rsa;
+        private readonly ITimestampProvider? _timestampProvider;
+
+        public KeyVaultSignatureProvider(RSA rsa, ITimestampProvider? timestampProvider = null)
+        {
+            _rsa = rsa ?? throw new ArgumentNullException(nameof(rsa));
+            _timestampProvider = timestampProvider;
+        }
+
+        // OIDs for NuGet signature attributes
+        private static readonly Oid CommitmentTypeIndicationOid = new("1.2.840.113549.1.9.16.2.16");
+        private static readonly Oid ProofOfOriginOid = new("1.2.840.113549.1.9.16.6.1");
+        private static readonly Oid SigningCertificateV2Oid = new("1.2.840.113549.1.9.16.2.47");
+
+        public async Task<PrimarySignature> CreatePrimarySignatureAsync(
+            SignPackageRequest request,
+            SignatureContent signatureContent,
+            NuGet.Common.ILogger logger,
+            CancellationToken token)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNull(signatureContent);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            // Get the hash algorithm
+            var hashAlgorithm = GetHashAlgorithmName(request.SignatureHashAlgorithm);
+
+            // Create the CMS signer using the certificate and Key Vault RSA
+            // This constructor allows passing the RSA separately, so the certificate
+            // doesn't need to have HasPrivateKey = true
+            var cmsSigner = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, request.Certificate, _rsa)
+            {
+                DigestAlgorithm = new Oid(hashAlgorithm.Name ?? "SHA256"),
+                IncludeOption = X509IncludeOption.WholeChain
+            };
+
+            // Add signing time attribute
+            cmsSigner.SignedAttributes.Add(new Pkcs9SigningTime());
+
+            // Add commitment type indication attribute (required for NuGet author signatures)
+            // This identifies the signature as an "author" signature (proof of origin)
+            cmsSigner.SignedAttributes.Add(CreateCommitmentTypeIndicationAttribute());
+
+            // Add signing certificate V2 attribute (ESSCertIDv2)
+            // This links the signature to the specific signing certificate
+            cmsSigner.SignedAttributes.Add(CreateSigningCertificateV2Attribute(request.Certificate, hashAlgorithm));
+
+            // Create the content info from the signature content
+            var contentInfo = new ContentInfo(signatureContent.GetBytes());
+
+            // Create and compute the CMS signature
+            var signedCms = new SignedCms(contentInfo);
+            signedCms.ComputeSignature(cmsSigner, silent: true);
+
+            // Get the encoded signature
+            var signature = signedCms.Encode();
+
+            // Create the primary signature
+            var primarySignature = PrimarySignature.Load(signature);
+
+            // Add timestamp if provider is available
+            if (_timestampProvider != null)
+            {
+                primarySignature = await TimestampPrimarySignatureAsync(
+                    request,
+                    primarySignature,
+                    logger,
+                    token);
+            }
+
+            return primarySignature;
+        }
+
+        /// <summary>
+        /// Creates the commitment type indication attribute for author signatures.
+        /// This is required by NuGet to identify the signature type.
+        /// </summary>
+        private static AsnEncodedData CreateCommitmentTypeIndicationAttribute()
+        {
+            // CommitmentTypeIndication ::= SEQUENCE {
+            //   commitmentTypeId CommitmentTypeIdentifier,
+            //   commitmentTypeQualifier SEQUENCE SIZE (1..MAX) OF CommitmentTypeQualifier OPTIONAL
+            // }
+            // For author signatures, we use proofOfOrigin (1.2.840.113549.1.9.16.6.1)
+            var writer = new AsnWriter(AsnEncodingRules.DER);
+            using (writer.PushSequence())
+            {
+                writer.WriteObjectIdentifier(ProofOfOriginOid.Value!);
+            }
+
+            return new AsnEncodedData(CommitmentTypeIndicationOid, writer.Encode());
+        }
+
+        /// <summary>
+        /// Creates the signing certificate V2 attribute (ESSCertIDv2).
+        /// This links the signature to the specific signing certificate.
+        /// </summary>
+        private static AsnEncodedData CreateSigningCertificateV2Attribute(
+            X509Certificate2 certificate,
+            System.Security.Cryptography.HashAlgorithmName hashAlgorithm)
+        {
+            // SigningCertificateV2 ::= SEQUENCE {
+            //   certs SEQUENCE OF ESSCertIDv2,
+            //   policies SEQUENCE OF PolicyInformation OPTIONAL
+            // }
+            // ESSCertIDv2 ::= SEQUENCE {
+            //   hashAlgorithm AlgorithmIdentifier DEFAULT {algorithm id-sha256},
+            //   certHash Hash,
+            //   issuerSerial IssuerSerial OPTIONAL
+            // }
+            // IssuerSerial ::= SEQUENCE {
+            //   issuer GeneralNames,
+            //   serialNumber CertificateSerialNumber
+            // }
+
+            // Compute the certificate hash
+            byte[] certHash;
+            string algorithmOid;
+
+            using (var hasher = IncrementalHash.CreateHash(hashAlgorithm))
+            {
+                hasher.AppendData(certificate.RawData);
+                certHash = hasher.GetHashAndReset();
+            }
+
+            // Get the algorithm OID
+            algorithmOid = hashAlgorithm.Name switch
+            {
+                "SHA256" => "2.16.840.1.101.3.4.2.1",
+                "SHA384" => "2.16.840.1.101.3.4.2.2",
+                "SHA512" => "2.16.840.1.101.3.4.2.3",
+                _ => "2.16.840.1.101.3.4.2.1" // Default to SHA256
+            };
+
+            var writer = new AsnWriter(AsnEncodingRules.DER);
+
+            // SigningCertificateV2 SEQUENCE
+            using (writer.PushSequence())
+            {
+                // certs SEQUENCE OF ESSCertIDv2
+                using (writer.PushSequence())
+                {
+                    // ESSCertIDv2 SEQUENCE
+                    using (writer.PushSequence())
+                    {
+                        // hashAlgorithm AlgorithmIdentifier (only include if not SHA256, as SHA256 is default)
+                        if (hashAlgorithm != System.Security.Cryptography.HashAlgorithmName.SHA256)
+                        {
+                            using (writer.PushSequence())
+                            {
+                                writer.WriteObjectIdentifier(algorithmOid);
+                                writer.WriteNull();
+                            }
+                        }
+
+                        // certHash OCTET STRING
+                        writer.WriteOctetString(certHash);
+
+                        // issuerSerial SEQUENCE
+                        using (writer.PushSequence())
+                        {
+                            // issuer GeneralNames (SEQUENCE OF GeneralName)
+                            using (writer.PushSequence())
+                            {
+                                // GeneralName - directoryName [4]
+                                using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 4)))
+                                {
+                                    // Write the issuer distinguished name
+                                    writer.WriteEncodedValue(certificate.IssuerName.RawData);
+                                }
+                            }
+
+                            // serialNumber INTEGER
+                            var serialBytes = certificate.GetSerialNumber();
+                            // .NET returns serial number in little-endian, ASN.1 needs big-endian
+                            Array.Reverse(serialBytes);
+                            writer.WriteIntegerUnsigned(serialBytes);
+                        }
+                    }
+                }
+            }
+
+            return new AsnEncodedData(SigningCertificateV2Oid, writer.Encode());
+        }
+
+        public Task<PrimarySignature> CreateRepositoryCountersignatureAsync(
+            RepositorySignPackageRequest request,
+            PrimarySignature primarySignature,
+            NuGet.Common.ILogger logger,
+            CancellationToken token)
+        {
+            // Repository countersignatures are not commonly used and would require
+            // additional implementation. For now, return the primary signature unchanged.
+            throw new NotSupportedException("Repository countersignatures are not supported with Key Vault signing.");
+        }
+
+        private async Task<PrimarySignature> TimestampPrimarySignatureAsync(
+            SignPackageRequest request,
+            PrimarySignature signature,
+            NuGet.Common.ILogger logger,
+            CancellationToken token)
+        {
+            if (_timestampProvider == null)
+            {
+                return signature;
+            }
+
+            var signatureValue = signature.GetSignatureValue();
+            var messageHash = GetHashAlgorithmName(request.TimestampHashAlgorithm);
+
+            using var hashAlgorithm = IncrementalHash.CreateHash(messageHash);
+            hashAlgorithm.AppendData(signatureValue);
+            var hash = hashAlgorithm.GetHashAndReset();
+
+            var timestampRequest = new TimestampRequest(
+                signingSpecifications: SigningSpecifications.V1,
+                hashedMessage: hash,
+                hashAlgorithm: request.TimestampHashAlgorithm,
+                target: SignaturePlacement.PrimarySignature);
+
+            var timestampedSignature = await _timestampProvider.TimestampSignatureAsync(
+                signature,
+                timestampRequest,
+                logger,
+                token);
+
+            return timestampedSignature;
+        }
+
+        private static System.Security.Cryptography.HashAlgorithmName GetHashAlgorithmName(NuGet.Common.HashAlgorithmName hashAlgorithm)
+        {
+            return hashAlgorithm switch
+            {
+                NuGet.Common.HashAlgorithmName.SHA256 => System.Security.Cryptography.HashAlgorithmName.SHA256,
+                NuGet.Common.HashAlgorithmName.SHA384 => System.Security.Cryptography.HashAlgorithmName.SHA384,
+                NuGet.Common.HashAlgorithmName.SHA512 => System.Security.Cryptography.HashAlgorithmName.SHA512,
+                _ => System.Security.Cryptography.HashAlgorithmName.SHA256
+            };
+        }
     }
 
     /// <summary>

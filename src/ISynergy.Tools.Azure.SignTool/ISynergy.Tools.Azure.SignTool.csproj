@@ -23,5 +23,4 @@
   <ItemGroup>
     <ProjectReference Include="..\ISynergy.Tools.Azure.SignTool.Core\ISynergy.Tools.Azure.SignTool.Core.csproj" />
   </ItemGroup>
-
 </Project>

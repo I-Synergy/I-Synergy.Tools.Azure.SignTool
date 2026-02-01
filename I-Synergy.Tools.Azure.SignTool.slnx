@@ -9,7 +9,6 @@
     <File Path=".gitignore" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
-    <File Path="README.md" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/ISynergy.Tools.Azure.SignTool.Core.Tests/ISynergy.Tools.Azure.SignTool.Core.Tests.csproj" Id="c92f47b1-e76f-4a3d-bc83-cc0cc15c3a2f" />
