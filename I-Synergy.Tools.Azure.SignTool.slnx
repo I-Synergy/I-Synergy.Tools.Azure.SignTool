@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/Documents/" />
+  <Folder Name="/Projects/">
+    <Project Path="src/ISynergy.Tools.Azure.SignTool.Core/ISynergy.Tools.Azure.SignTool.Core.csproj" Id="a8354017-9841-4ab7-abcf-c70c3e9e62ec" />
+    <Project Path="src/ISynergy.Tools.Azure.SignTool/ISynergy.Tools.Azure.SignTool.csproj" Id="74a600c6-9f12-47f3-8896-c9b0f01d8c6a" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/ISynergy.Tools.Azure.SignTool.Core.Tests/ISynergy.Tools.Azure.SignTool.Core.Tests.csproj" Id="c92f47b1-e76f-4a3d-bc83-cc0cc15c3a2f" />
+    <Project Path="tests/ISynergy.Tools.Azure.SignTool.Tests/ISynergy.Tools.Azure.SignTool.Tests.csproj" Id="a405eff1-8b1f-4f82-b48d-b62634fe2cf5" />
+  </Folder>
+</Solution>
